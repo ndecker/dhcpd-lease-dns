@@ -10,8 +10,8 @@ import (
 
 type DB struct {
 	mu       sync.Mutex
-	leases   map[string]Lease // key: lowercase hostname
-	ipLeases map[string]Lease // key: ip.String()
+	leases   map[string]*Lease // key: lowercase hostname
+	ipLeases map[string]*Lease // key: ip.String()
 }
 
 type Lease struct {
@@ -26,12 +26,12 @@ type Lease struct {
 
 func NewDB() *DB {
 	return &DB{
-		leases:   make(map[string]Lease),
-		ipLeases: make(map[string]Lease),
+		leases:   make(map[string]*Lease),
+		ipLeases: make(map[string]*Lease),
 	}
 }
 
-func (db *DB) Add(l Lease) {
+func (db *DB) Add(l *Lease) {
 	if !l.Prepare() {
 		return
 	}
@@ -47,46 +47,46 @@ func (db *DB) Add(l Lease) {
 	db.cleanup()
 }
 
-func (db *DB) Lookup(name string) (Lease, bool) {
+func (db *DB) Lookup(name string) *Lease {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	l, ok := db.leases[strings.ToLower(name)]
 
 	if !ok {
-		return Lease{}, false
+		return nil
 	}
 
 	now := time.Now()
 	if l.Starts.After(now) {
-		return Lease{}, false
+		return nil
 	}
 
 	if l.Ends.Before(now) {
-		return Lease{}, false
+		return nil
 	}
-	return l, true
+	return l
 }
 
-func (db *DB) LookupIP(ip net.IP) (Lease, bool) {
+func (db *DB) LookupIP(ip net.IP) *Lease {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	l, ok := db.ipLeases[ip.String()]
 
 	if !ok {
-		return Lease{}, false
+		return nil
 	}
 
 	now := time.Now()
 	if l.Starts.After(now) {
-		return Lease{}, false
+		return nil
 	}
 
 	if l.Ends.Before(now) {
-		return Lease{}, false
+		return nil
 	}
-	return l, true
+	return l
 }
 
 func (db *DB) cleanup() {
@@ -126,7 +126,7 @@ func (l *Lease) Prepare() bool {
 	return true
 }
 
-func (l Lease) String() string {
+func (l *Lease) String() string {
 	return fmt.Sprintf("%s: %s (ends %s)",
 		l.ClientHostname, l.IP.String(),
 		l.Ends.Sub(time.Now()).Round(time.Second).String())

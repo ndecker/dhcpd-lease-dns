@@ -69,8 +69,8 @@ func lookupName(db *DB, domain string) DnsLookup {
 		hostname := strings.TrimSuffix(query, domain)
 		hostname = strings.TrimSuffix(hostname, ".")
 
-		lease, ok := db.Lookup(hostname)
-		if !ok {
+		lease := db.Lookup(hostname)
+		if lease == nil {
 			logDebug("hostname not found: '%s'", hostname)
 			return nil
 		}
@@ -113,8 +113,8 @@ func lookupIp(db *DB, domain string) DnsLookup {
 			return nil
 		}
 
-		lease, ok := db.LookupIP(ip)
-		if !ok {
+		lease := db.LookupIP(ip)
+		if lease == nil {
 			logDebug("ip not found: '%s'", ip)
 			return nil
 		}

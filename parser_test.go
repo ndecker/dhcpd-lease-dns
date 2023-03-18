@@ -32,10 +32,10 @@ func FuzzLeaseParser(t *testing.F) {
 		lp1 := &leaseParser{}
 		lp1.AddData(data)
 
-		var leases1 []Lease
+		var leases1 []*Lease
 		for {
-			l, ok := lp1.ParseLease()
-			if !ok {
+			l := lp1.ParseLease()
+			if l == nil {
 				break
 			}
 			leases1 = append(leases1, l)
@@ -45,7 +45,7 @@ func FuzzLeaseParser(t *testing.F) {
 		lp2 := &leaseParser{}
 		data2 := data[:]
 		blockSize2 := blockSize
-		var leases2 []Lease
+		var leases2 []*Lease
 		for {
 			if blockSize2 >= len(data2) {
 				blockSize2 = len(data2)
@@ -60,8 +60,8 @@ func FuzzLeaseParser(t *testing.F) {
 			lp2.AddData(block)
 
 			for {
-				l, ok := lp2.ParseLease()
-				if !ok {
+				l := lp2.ParseLease()
+				if l == nil {
 					break
 				}
 				leases2 = append(leases2, l)

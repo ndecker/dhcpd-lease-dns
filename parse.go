@@ -26,8 +26,8 @@ func parseLeases(r io.ReadCloser, db *DB) error {
 		lp.AddData(buf)
 
 		for {
-			l, ok := lp.ParseLease()
-			if !ok {
+			l := lp.ParseLease()
+			if l == nil {
 				// logDebug("parser: no lease: %s", lp.data[lp.pos:lp.pos+10])
 				break
 			}
@@ -49,14 +49,14 @@ func (lp *leaseParser) AddData(data []byte) {
 }
 
 // ParseLease parses one lease and returns it. If not enough data is present, null is returned.
-func (lp *leaseParser) ParseLease() (l Lease, ok bool) {
+func (lp *leaseParser) ParseLease() (l *Lease) {
 	startPos := lp.pos
 	defer func() {
 		err := recover()
 		if err == io.EOF {
 			// logDebug("parser: recover EOF: %d => %d", lp.pos, startPos)
 			lp.pos = startPos // restore start position
-			ok = false
+			l = nil
 			return
 		} else if err != nil {
 			panic(err)
@@ -70,7 +70,10 @@ func (lp *leaseParser) ParseLease() (l Lease, ok bool) {
 			continue
 		}
 
+		l = &Lease{}
+
 		lp.skipWS()
+		var ok bool
 		l.IP, ok = lp.ParseIP()
 		if !ok {
 			lp.discardToNL()
@@ -92,7 +95,7 @@ func (lp *leaseParser) ParseLease() (l Lease, ok bool) {
 		lp.skipWS()
 		if lp.Consume([]byte("}")) {
 			// logDebug("parser: lease done")
-			return l, true // keep lp.pos
+			return l // keep lp.pos
 		}
 
 		if lp.Consume([]byte("starts")) {
