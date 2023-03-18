@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/miekg/dns"
 )
 
-// TODO: in-addr.arpa
+const InAddrArpa = "in-addr.arpa."
 
 func startDns(db *DB, domain string, port int) error {
 	if !strings.HasSuffix(domain, ".") {
@@ -19,7 +20,8 @@ func startDns(db *DB, domain string, port int) error {
 
 	mux := dns.NewServeMux()
 
-	mux.HandleFunc(domain, dnsHandler(db, domain))
+	mux.HandleFunc(domain, dnsHandler(lookupName(db, domain)))
+	mux.HandleFunc(InAddrArpa, dnsHandler(lookupIp(db, domain)))
 
 	server := dns.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -51,22 +53,17 @@ func startDns(db *DB, domain string, port int) error {
 
 }
 
-func dnsHandler(db *DB, domain string) func(w dns.ResponseWriter, r *dns.Msg) {
-	return func(w dns.ResponseWriter, r *dns.Msg) {
-		logDebug("DNS Request: %+v", r)
+type DnsLookup func(query string, typ uint16) []dns.RR
 
-		m := &dns.Msg{}
-		m.SetReply(r)
-
-		if len(r.Question) < 1 {
-			return
+func lookupName(db *DB, domain string) DnsLookup {
+	return func(query string, typ uint16) []dns.RR {
+		if typ != dns.TypeA {
+			return nil
 		}
 
-		query := r.Question[0].Name
-		// logDebug("query: %s\n", query)
-
 		if !strings.HasSuffix(query, domain) {
-			logFatal("dns query does not match configured domain: %s / %s", query, domain)
+			logInfo("dns query does not match configured domain: %s / %s", query, domain)
+			return nil
 		}
 
 		hostname := strings.TrimSuffix(query, domain)
@@ -75,11 +72,7 @@ func dnsHandler(db *DB, domain string) func(w dns.ResponseWriter, r *dns.Msg) {
 		lease, ok := db.Lookup(hostname)
 		if !ok {
 			logDebug("hostname not found: '%s'", hostname)
-			err := w.WriteMsg(m)
-			if err != nil {
-				logInfo("cannot send reply: %s", err)
-			}
-			return
+			return nil
 		}
 
 		rr := &dns.A{
@@ -92,13 +85,69 @@ func dnsHandler(db *DB, domain string) func(w dns.ResponseWriter, r *dns.Msg) {
 			A: lease.IP,
 		}
 
-		switch r.Question[0].Qtype {
-		case dns.TypeA:
-			m.Answer = append(m.Answer, rr)
-			// m.Extra = append(m.Extra, t)
+		return []dns.RR{rr}
+	}
+}
+
+func lookupIp(db *DB, domain string) DnsLookup {
+	return func(query string, typ uint16) []dns.RR {
+		if typ != dns.TypePTR {
+			return nil
 		}
 
-		logDebug("%v\n", m.String())
+		if !strings.HasSuffix(query, "."+InAddrArpa) {
+			logInfo("unexpected query: %s", query)
+			return nil
+		}
+
+		ipStr := strings.TrimSuffix(query, "."+InAddrArpa)
+		ipParts := strings.Split(ipStr, ".")
+		for i, j := 0, len(ipParts)-1; i < j; i, j = i+1, j-1 {
+			ipParts[i], ipParts[j] = ipParts[j], ipParts[i]
+		}
+		ipStr = strings.Join(ipParts, ".")
+
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			logInfo("cannot parse ip: %s", ipStr)
+			return nil
+		}
+
+		lease, ok := db.LookupIP(ip)
+		if !ok {
+			logDebug("ip not found: '%s'", ip)
+			return nil
+		}
+
+		ptr := &dns.PTR{
+			Hdr: dns.RR_Header{
+				Name:   query,
+				Rrtype: dns.TypePTR,
+				Class:  dns.ClassINET,
+				Ttl:    0,
+			},
+			Ptr: fmt.Sprintf("%s.%s", lease.ClientHostname, domain),
+		}
+
+		return []dns.RR{ptr}
+	}
+}
+
+func dnsHandler(lookup DnsLookup) func(w dns.ResponseWriter, r *dns.Msg) {
+	return func(w dns.ResponseWriter, r *dns.Msg) {
+		logDebug("DNS Request: %+v", r)
+
+		m := &dns.Msg{}
+		m.SetReply(r)
+
+		for i, q := range r.Question {
+			query := q.Name
+			logDebug("query %d: %s\n", i, query)
+
+			answer := lookup(query, r.Question[0].Qtype)
+			logDebug("answer: %v", answer)
+			m.Answer = append(m.Answer, answer...)
+		}
 
 		err := w.WriteMsg(m)
 		if err != nil {

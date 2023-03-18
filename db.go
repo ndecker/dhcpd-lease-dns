@@ -9,8 +9,9 @@ import (
 )
 
 type DB struct {
-	mu     sync.Mutex
-	leases map[string]Lease // key: lowercase hostname
+	mu       sync.Mutex
+	leases   map[string]Lease // key: lowercase hostname
+	ipLeases map[string]Lease // key: ip.String()
 }
 
 type Lease struct {
@@ -25,7 +26,8 @@ type Lease struct {
 
 func NewDB() *DB {
 	return &DB{
-		leases: make(map[string]Lease),
+		leases:   make(map[string]Lease),
+		ipLeases: make(map[string]Lease),
 	}
 }
 
@@ -41,6 +43,7 @@ func (db *DB) Add(l Lease) {
 	defer db.mu.Unlock()
 
 	db.leases[strings.ToLower(l.ClientHostname)] = l
+	db.ipLeases[l.IP.String()] = l
 	db.cleanup()
 }
 
@@ -65,14 +68,42 @@ func (db *DB) Lookup(name string) (Lease, bool) {
 	return l, true
 }
 
+func (db *DB) LookupIP(ip net.IP) (Lease, bool) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	l, ok := db.ipLeases[ip.String()]
+
+	if !ok {
+		return Lease{}, false
+	}
+
+	now := time.Now()
+	if l.Starts.After(now) {
+		return Lease{}, false
+	}
+
+	if l.Ends.Before(now) {
+		return Lease{}, false
+	}
+	return l, true
+}
+
 func (db *DB) cleanup() {
 	// must be called with lock held
 
 	now := time.Now()
 	for k, l := range db.leases {
 		if l.Ends.Before(now) {
-			logDebug("deleting expired lease: %v", l)
+			logDebug("deleting expired lease: %s", k)
 			delete(db.leases, k)
+		}
+	}
+
+	for k, l := range db.ipLeases {
+		if l.Ends.Before(now) {
+			logDebug("deleting expired lease: %s", k)
+			delete(db.ipLeases, k)
 		}
 	}
 }
