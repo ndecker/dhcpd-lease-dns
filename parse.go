@@ -28,7 +28,7 @@ func parseLeases(r io.ReadCloser, db *DB) error {
 		for {
 			l, ok := lp.ParseLease()
 			if !ok {
-				logDebug("parser: no lease: %s", lp.data[lp.pos:lp.pos+10])
+				// logDebug("parser: no lease: %s", lp.data[lp.pos:lp.pos+10])
 				break
 			}
 			logDebug("parser: lease found: %+v", l)
@@ -43,7 +43,7 @@ type leaseParser struct {
 }
 
 func (lp *leaseParser) AddData(data []byte) {
-	logDebug("parser: AddData(%d)", len(data))
+	// logDebug("parser: AddData(%d)", len(data))
 	lp.data = append(lp.data[lp.pos:], data...)
 	lp.pos = 0
 }
@@ -54,7 +54,7 @@ func (lp *leaseParser) ParseLease() (l Lease, ok bool) {
 	defer func() {
 		err := recover()
 		if err == io.EOF {
-			logDebug("parser: recover EOF: %d => %d", lp.pos, startPos)
+			// logDebug("parser: recover EOF: %d => %d", lp.pos, startPos)
 			lp.pos = startPos // restore start position
 			ok = false
 			return
@@ -86,12 +86,12 @@ func (lp *leaseParser) ParseLease() (l Lease, ok bool) {
 		break // success
 	}
 
-	logDebug("parser: found lease: %s\n", l.IP)
+	// logDebug("parser: found lease: %s\n", l.IP)
 
 	for {
 		lp.skipWS()
 		if lp.Consume([]byte("}")) {
-			logDebug("parser: lease done")
+			// logDebug("parser: lease done")
 			return l, true // keep lp.pos
 		}
 

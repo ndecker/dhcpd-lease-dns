@@ -49,7 +49,6 @@ func (db *DB) Lookup(name string) (Lease, bool) {
 	defer db.mu.Unlock()
 
 	l, ok := db.leases[strings.ToLower(name)]
-	logDebug("lookup lease \"%s\": %b %v", name, ok, l)
 
 	if !ok {
 		return Lease{}, false
@@ -94,4 +93,10 @@ func (l *Lease) Prepare() bool {
 		l.ClientHostname = fmt.Sprintf("dhcp-%d-%d-%d-%d", l.IP[0], l.IP[1], l.IP[2], l.IP[3])
 	}
 	return true
+}
+
+func (l Lease) String() string {
+	return fmt.Sprintf("%s: %s (ends %s)",
+		l.ClientHostname, l.IP.String(),
+		l.Ends.Sub(time.Now()).Round(time.Second).String())
 }
