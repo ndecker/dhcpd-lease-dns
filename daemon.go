@@ -10,8 +10,6 @@ import (
 )
 
 var (
-	context = daemon.Context{}
-
 	flagDaemon = flag.Bool("daemon", false, "daemonize process")
 
 	flagPidFile = flag.String("daemon.pidfile", "", "pid file name")
@@ -50,12 +48,14 @@ func daemonize(f func()) {
 		}
 	}()
 
-	sysl, err := syslog.New(syslog.LOG_INFO|syslog.LOG_USER, filepath.Base(os.Args[0]))
-	if err != nil {
-		logFatal("cannot open syslog: %s", err)
-	}
+	if *flagSyslog {
+		sysl, err := syslog.New(syslog.LOG_INFO|syslog.LOG_USER, filepath.Base(os.Args[0]))
+		if err != nil {
+			logFatal("cannot open syslog: %s", err)
+		}
 
-	logger = log.New(sysl, "", log.Flags())
+		logger = log.New(sysl, "", log.Flags())
+	}
 
 	f()
 }
