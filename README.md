@@ -4,7 +4,7 @@ dhcpd-lease-dns
 `dhcpd-lease-dns` is a DNS server that reads OpenBSD dhcpd `dhcpd.leases` file and
 answers DNS querys on the lease entries.
 
-On startup, it executes `tail -f dhcpd.leases`, starts the DNS server. On OpenBSD it pledges "stdio inet proc".
+On startup, it executes `tail -f dhcpd.leases`, starts the DNS server. On OpenBSD, it pledges "stdio inet proc".
 
 Building
 --------
@@ -12,7 +12,7 @@ Building
 
     go build
 
-Cross compiling for OpenBSD on any go platform is easy:
+Cross compiling for OpenBSD on any go platform:
 
     GOOS=openbsd go build
     
@@ -34,7 +34,6 @@ Commandline
     -daemon.pidfile string pid file name
     -daemon.syslog         log to syslog (default true)
 
-
     -quiet                 quiet normal logging
     -debug                 debug logging
     -license               show license
@@ -44,7 +43,7 @@ Commandline
 Configure as daemon on OpenBSD
 ------------------------------
 
-`/etc/rc.d/dhcpddns`:
+/etc/rc.d/dhcpddns
 
     #!/bin/ksh
 
@@ -58,21 +57,26 @@ Configure as daemon on OpenBSD
     rc_cmd $1
 
 
-`/etc/rc.conf.local`:
+/etc/rc.conf.local
 
     pkg_scripts=dhcpddns
-    dhcpddns-flags=-domain=dhcp.my.domain
+    dhcpddns_flags=-domain=dhcp.my.domain
 
 
 Stub-Zone in unbound
 --------------------
 
-`/var/unbound/etc/unbound.conf`:
+/var/unbound/etc/unbound.conf
 
     server:
         local-zone: "dhcp.my.domain" transparent
+        local-zone: "168.192.in-addr.arpa" transparent
         # do-not-query-localhost: no # needed if stub-addr is localhost
 
     stub-zone:
         name: "dhcp.my.domain."
         stub-addr: 192.168.123.123@5333
+
+    stub-zone:                                                                                                                                                    
+        name: "168.192.in-addr.arpa."                                                                                                                          
+        stub-addr: 192.168.123.123@5333  
